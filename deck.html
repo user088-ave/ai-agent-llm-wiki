@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>簡單實作 AI Agents - 教學簡報</title>
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-green: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-red: #f87171;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --code-bg: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 頂部進度條 */
+    .progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      z-index: 100;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 10%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* 簡報外框容器 (16:9 比例) */
+    .deck-container {
+      position: relative;
+      width: 100%;
+      max-width: 1020px;
+      height: 600px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 30px 0 rgba(56, 189, 248, 0.08);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 投影片頭部 */
+    .slide-header {
+      padding: 18px 28px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .topic-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+    .slide-counter {
+      font-family: "Fira Code", monospace;
+      font-size: 14px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* 投影片主體 */
+    .slide-body {
+      flex: 1;
+      padding: 24px 32px;
+      position: relative;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+      animation: fadeIn 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .slide-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .slide-body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    .slide-body.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 標題與副標題 */
+    .slide-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slide-title span.emoji {
+      font-size: 28px;
+    }
+
+    /* 內容網格佈局 */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      width: 100%;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      width: 100%;
+    }
+
+    /* 卡片模組 */
+    .card {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px 18px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+    .card:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .card-desc strong {
+      color: #e2e8f0;
+    }
+
+    /* 強調標記 */
+    .highlight {
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .badge-blue { background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); }
+    .badge-green { background: rgba(52, 211, 153, 0.2); color: var(--accent-green); }
+    .badge-amber { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); }
+    .badge-red { background: rgba(248, 113, 113, 0.2); color: var(--accent-red); }
+
+    /* 清單樣式 */
+    ul.styled-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    ul.styled-list li {
+      position: relative;
+      padding-left: 20px;
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    ul.styled-list li::before {
+      content: "•";
+      color: var(--accent-blue);
+      font-weight: bold;
+      font-size: 18px;
+      position: absolute;
+      left: 2px;
+      top: -2px;
+    }
+
+    /* 步驟箭頭流程 */
+    .step-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .step-box {
+      flex: 1;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+    .step-num {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      background: var(--accent-blue);
+      color: #0b0f19;
+      font-weight: 700;
+      border-radius: 50%;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+    .step-arrow {
+      color: var(--accent-blue);
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    /* 程式碼區塊 */
+    .code-box {
+      background: var(--code-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-family: "Fira Code", monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #e2e8f0;
+      overflow-x: auto;
+    }
+    .code-comment { color: #64748b; }
+    .code-kw { color: #f43f5e; font-weight: 600; }
+    .code-fn { color: #38bdf8; }
+    .code-str { color: #34d399; }
+
+    /* 封面特殊樣式 */
+    .cover-content {
+      text-align: center;
+      padding: 20px 40px;
+    }
+    .cover-title {
+      font-size: 38px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 30%, var(--accent-blue) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 14px;
+      letter-spacing: -0.5px;
+    }
+    .cover-subtitle {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+    .tag-group {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* 投影片底部資訊與導航 */
+    .slide-footer {
+      padding: 12px 28px;
+      background: rgba(15, 23, 42, 0.4);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12.5px;
+    }
+    .citation-tag {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .citation-tag code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 8px;
+      border-radius: 6px;
+      color: var(--accent-blue);
+      font-family: "Fira Code", monospace;
+      font-size: 11.5px;
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .key-hint {
+      color: #64748b;
+      font-size: 11.5px;
+    }
+    .btn-nav {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-main);
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-nav:hover:not(:disabled) {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+    .btn-nav:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部即時進度條 -->
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- 簡報主體卡片 (16:9) -->
+  <div class="deck-container">
+    
+    <!-- 投影片頂端標籤列 -->
+    <div class="slide-header">
+      <div class="topic-pill">
+        <span>🤖</span> 簡單實作 AI Agents 教學
+      </div>
+      <div class="slide-counter" id="slideCounter">01 / 10</div>
+    </div>
+
+    <!-- ================= Slide 1: 封面 ================= -->
+    <div class="slide-body active" data-slide="1" data-source="wiki/index.md, wiki/guides/minimal-agent-from-scratch.md">
+      <div class="cover-content">
+        <h1 class="cover-title">簡單實作 AI Agents</h1>
+        <p class="cover-subtitle">
+          面向初學者的架構指南：捨棄厚重黑盒框架，從第一性原理掌握「思考、行動、記憶與安全防護」的原生實作核心。
+        </p>
+        <div class="tag-group">
+          <span class="badge badge-blue">Zero-Framework 極簡 Python</span>
+          <span class="badge badge-green">ReAct Pattern</span>
+          <span class="badge badge-amber">Tool Calling</span>
+          <span class="badge badge-red">Guardrails 安全煞車</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 2: 什麼是 AI Agent ================= -->
+    <div class="slide-body" data-slide="2" data-source="wiki/concepts/agent-architecture.md, wiki/sources/01_openai_practical_guide.md">
+      <h2 class="slide-title"><span class="emoji">💡</span> 什麼是 AI Agent？（白話核心概念）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📜 傳統軟體 vs 單純 LLM</div>
+          <p class="card-desc">
+            • <strong>傳統軟體</strong>：依賴寫死的 <code>if-else</code> 規則，路徑固定且僵化。<br>
+            • <strong>單純 LLM</strong>：本質上是<strong>「無狀態的文字機率預測器」</strong>。它像離線的大腦，能聊天但無法主動改變外部真實世界。
+          </p>
+        </div>
+        <div class="card" style="border-color: rgba(56, 189, 248, 0.4);">
+          <div class="card-title">🚀 現代 AI Agent</div>
+          <p class="card-desc">
+            • 以 LLM 作為<strong>推理大腦</strong>自主管理工作流程。<br>
+            • 具備三大自主能力：
+            <br>&nbsp;&nbsp;1. <strong>代表使用者決策</strong>（分析目標並拆解）
+            <br>&nbsp;&nbsp;2. <strong>調用外部工具</strong>（查詢資料庫、發送 API）
+            <br>&nbsp;&nbsp;3. <strong>自行判斷結束時機</strong>（產出 Final Answer）
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 3: 什麼時候該用 Agent ================= -->
+    <div class="slide-body" data-slide="3" data-source="wiki/concepts/agent-architecture.md, wiki/sources/01_openai_practical_guide.md">
+      <h2 class="slide-title"><span class="emoji">⚖️</span> 什麼時候該用 Agent？（適用邊界評估）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-green);">✅ 適合使用 Agent 的情境</div>
+          <ul class="styled-list">
+            <li><strong>複雜且模糊的決策</strong>：如退款爭議審查、風險評估，無法用硬編碼規則窮舉。</li>
+            <li><strong>過於龐大脆弱的規則庫</strong>：法規審查等規則極度難以維護的系統。</li>
+            <li><strong>高度依賴非結構化資料</strong>：需要整合自然語言、PDF、多輪對話與即時回饋。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-red);">❌ 建議使用傳統腳本（Script）的情境</div>
+          <ul class="styled-list">
+            <li><strong>流程完全固定且已知</strong>：若寫死 3 行程式碼即可穩定完成，絕不需要使用 Agent。</li>
+            <li><strong>要求 100% 確定性與毫秒延遲</strong>：如純粹欄位轉換或定時備份資料庫。</li>
+            <li><strong>避坑指南</strong>：切忌過度工程化，不要為了 Agent 而 Agent！</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 4: 核心四大解剖器官 ================= -->
+    <div class="slide-body" data-slide="4" data-source="wiki/concepts/agent-architecture.md, wiki/sources/02_build_ai_agent_from_scratch.md">
+      <h2 class="slide-title"><span class="emoji">🧩</span> Agent 的解剖結構（四大核心積木）</h2>
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-title">🧠 推理引擎</div>
+          <p class="card-desc"><strong>Model & Instructions</strong><br>Agent 的大腦。負責意圖理解、策略規劃與最終決策判定。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🛠️ 工具體系</div>
+          <p class="card-desc"><strong>Tool Registry</strong><br>Agent 的四肢與感官。連結外界，負責執行查詢與真實操作。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">💾 記憶系統</div>
+          <p class="card-desc"><strong>Memory System</strong><br>短期對話工作歷史（<code>messages</code>）與跨任務長期持久經驗。</p>
+        </div>
+        <div class="card">
+          <div class="card-title">🔄 執行迴圈</div>
+          <p class="card-desc"><strong>Execution Loop</strong><br>由原生 <code>while loop</code> 驅動狀態流轉，連結推理與工具執行。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 5: ReAct 模式 ================= -->
+    <div class="slide-body" data-slide="5" data-source="wiki/patterns/react-pattern.md, wiki/sources/04_react_agent_pattern.md">
+      <h2 class="slide-title"><span class="emoji">🔄</span> 思考與行動的節奏：ReAct 模式</h2>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 12px;">
+        <strong>ReAct = Reasoning（推理）+ Acting（行動）</strong>：讓模型交替產生「思維鏈」與「外部工具動作」的經典閉環。
+      </p>
+      <div class="step-flow">
+        <div class="step-box">
+          <span class="step-num">1</span>
+          <div class="step-title">Thought (思考)</div>
+          <div class="card-desc">分析使用者意圖：「我還缺少什麼資料？下一步該做什麼？」</div>
+        </div>
+        <span class="step-arrow">➔</span>
+        <div class="step-box">
+          <span class="step-num">2</span>
+          <div class="step-title">Action (行動)</div>
+          <div class="card-desc">選擇工具並輸出結構化參數（例如呼叫物流查詢函式）</div>
+        </div>
+        <span class="step-arrow">➔</span>
+        <div class="step-box">
+          <span class="step-num">3</span>
+          <div class="step-title">Observation (觀察)</div>
+          <div class="card-desc">接收工具執行的真實回傳，將結果寫回記憶進入下一輪 Thought</div>
+        </div>
+      </div>
+      <div style="margin-top: 14px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: #bae6fd;">
+        ✨ <strong>結束條件</strong>：當 Thought 判定已收集完畢所有線索，模型便跳出工具調用，輸出 <strong>Final Answer</strong>！
+      </div>
+    </div>
+
+    <!-- ================= Slide 6: 工具使用與註冊 ================= -->
+    <div class="slide-body" data-slide="6" data-source="wiki/concepts/tool-use-and-registry.md, wiki/sources/01_openai_practical_guide.md">
+      <h2 class="slide-title"><span class="emoji">🛠️</span> 工具體系：分類與註冊機制（Tools & Registry）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📌 工具三大分類 (OpenAI 標準)</div>
+          <ul class="styled-list">
+            <li><span class="badge badge-blue">Data 查詢類</span>：唯讀操作（查詢 DB、天氣）。風險低，自主調用。</li>
+            <li><span class="badge badge-amber">Action 動作類</span>：實質寫入（寄信、扣款、改資料）。高風險需控管。</li>
+            <li><span class="badge badge-green">Orchestration 編排類</span>：將專職 Sub-agent 當作工具呼叫。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title">📋 工具註冊表（Tool Registry）職責</div>
+          <ul class="styled-list">
+            <li><strong><code>TOOL_REGISTRY</code> 函式映射</strong>：真實 Python 函式字典（如 <code>{"get_weather": get_weather}</code>），負責被調用時執行。</li>
+            <li><strong><code>TOOLS_SCHEMA</code> 規格定義</strong>：傳給模型的工具清單，以 JSON Schema 定義函式名稱、用途與參數型別。</li>
+            <li><strong>強制結構化輸出</strong>：在 API 傳入 <code>tools=TOOLS_SCHEMA</code>，保證回傳合法 JSON，根絕字串解析失敗。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 7: 記憶體系 ================= -->
+    <div class="slide-body" data-slide="7" data-source="wiki/concepts/memory-systems.md, wiki/sources/03_anatomy_of_an_ai_agent.md">
+      <h2 class="slide-title"><span class="emoji">💾</span> 記憶體系：短期工作記憶 vs 長期持久記憶</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📝 短期工作記憶 (Working Memory)</div>
+          <p class="card-desc">
+            • <strong>形式</strong>：以 Python <code>messages</code> 陣列維護（system / user / assistant / tool）。<br>
+            • <strong>生命週期</strong>：僅存活於單次對話任務。<br>
+            • <strong>限制與修剪</strong>：受 Context Window 限制。過長時可透過<strong>滑動視窗</strong>、<strong>歷史摘要</strong>或<strong>工具截斷</strong>進行壓縮修剪。
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">🗄️ 長期持久記憶 (Long-term Memory)</div>
+          <p class="card-desc">
+            • <strong>情景記憶 (Episodic)</strong>：記錄過去任務的執行軌跡與成敗經驗，避免再次踩坑。<br>
+            • <strong>語意記憶 (Semantic)</strong>：儲存事實知識與使用者偏好，通常外掛向量資料庫（Vector DB）。<br>
+            • <strong>建議</strong>：初學者先做好短期訊息陣列管理，業務需要時再引入長期記憶。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 8: 安全護欄與評測 ================= -->
+    <div class="slide-body" data-slide="8" data-source="wiki/concepts/guardrails-and-evals.md, wiki/sources/05_ai_agent_guardrails_vs_evals.md">
+      <h2 class="slide-title"><span class="emoji">🛡️</span> 安全護欄 vs 評測（Guardrails & Evals）</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-amber);">🛑 執行期護欄四大面向 (Guardrails)</div>
+          <ul class="styled-list" style="font-size: 13.5px;">
+            <li><strong>1. 輸入與範圍護欄</strong>：過濾惡意 Prompt，超出權責誠實拒絕。</li>
+            <li><strong>2. 工具執行護欄</strong>：權限讀寫隔離、金額與參數型別校驗。</li>
+            <li><strong>3. 迴圈重試煞車</strong>：限制迭代上限，防止工具死循環。</li>
+            <li><strong>4. 輸出忠實度護欄</strong>：格式檢查與防幻覺對照。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-indigo);">🎯 評測體系與人機協作 (Evals & HITL)</div>
+          <ul class="styled-list" style="font-size: 13.5px;">
+            <li><strong>Guardrails vs Evals 邊界</strong>：護欄是「即時攔截硬邏輯」；評測是「離線量測任務品質與迭代指南」。</li>
+            <li><strong>人機協作 (Human-in-the-loop)</strong>：遇到大額轉帳、刪除等高風險動作，暫停並轉交人工確認。</li>
+            <li><strong>正向閉環</strong>：線上護欄攔截紀錄 ➔ 沉澱為離線測試案例。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Slide 9: 原生 Python 極簡實作 ================= -->
+    <div class="slide-body" data-slide="9" data-source="wiki/guides/minimal-agent-from-scratch.md, wiki/sources/02_build_ai_agent_from_scratch.md">
+      <h2 class="slide-title"><span class="emoji">💻</span> 原生極簡實作：只要一個 while 迴圈</h2>
+      <div class="code-box">
+<span class="code-comment"># 捨棄厚重框架，純原生 Python 揭露 Agent 狀態流轉核心</span>
+<span class="code-kw">while</span> iteration &lt; max_iterations:
+    iteration += <span class="code-str">1</span>
+    <span class="code-comment"># 1. 調用 LLM 推理</span>
+    response = client.chat.completions.create(model=<span class="code-str">"gpt-4o"</span>, messages=messages, tools=TOOLS_SCHEMA)
+    msg = response.choices[<span class="code-str">0</span>].message
+    messages.append(msg) <span class="code-comment"># 寫入短期工作記憶</span>
+
+    <span class="code-comment"># 2. 判斷是否有工具動作需求 (Action)</span>
+    <span class="code-kw">if not</span> msg.tool_calls:
+        <span class="code-kw">return</span> msg.content <span class="code-comment"># 獲得 Final Answer，完成退出！</span>
+
+    <span class="code-comment"># 3. 執行本地 Python 函式並將結果塞回 Observation</span>
+    <span class="code-kw">for</span> tool_call <span class="code-kw">in</span> msg.tool_calls:
+        result = TOOL_REGISTRY[tool_call.function.name](**json.loads(tool_call.function.arguments))
+        messages.append({<span class="code-str">"role"</span>: <span class="code-str">"tool"</span>, <span class="code-str">"tool_call_id"</span>: tool_call.id, <span class="code-str">"content"</span>: str(result)})
+      </div>
+    </div>
+
+    <!-- ================= Slide 10: 常見踩坑與編排進化 ================= -->
+    <div class="slide-body" data-slide="10" data-source="wiki/patterns/react-pattern.md, wiki/patterns/orchestration-patterns.md">
+      <h2 class="slide-title"><span class="emoji">🚀</span> 常見踩坑防範與編排進化路徑</h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-red);">⚠️ 常見三大踩坑（Failure Modes）</div>
+          <ul class="styled-list" style="font-size: 13.5px;">
+            <li><strong>工具死循環 (Tool Loops)</strong>：報錯時反覆重試 ➔ <em>解法：硬性重試煞車與引導錯誤訊息。</em></li>
+            <li><strong>推理漂移 (Reasoning Drift)</strong>：對話過長忘記初衷 ➔ <em>解法：設定步數上限與上下文修剪。</em></li>
+            <li><strong>提示詞注入 (Prompt Injection)</strong>：外部內容夾帶惡意指令 ➔ <em>解法：角色隔離與輸出校驗。</em></li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-blue);">🧭 架構編排進化原則</div>
+          <ul class="styled-list" style="font-size: 13.5px;">
+            <li><strong>從 Single-Agent 開始</strong>：工具小於 8 個時最快、最穩、延遲最低。</li>
+            <li><strong>避免過早引入 Multi-Agent</strong>：多 Agent 容易引發無效對話（Chatter）與除錯黑洞。</li>
+            <li><strong>何時升級？</strong>：只有在單一 Agent 工具過多造成混淆，或業務部門權限隔離時，才升級 Manager 或 Handoff 模式。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 投影片底部資訊列與按鈕 -->
+    <div class="slide-footer">
+      <div class="citation-tag">
+        <span>📖 出處來源：</span>
+        <code id="sourceTag">wiki/index.md</code>
+      </div>
+      <div class="nav-controls">
+        <span class="key-hint">換頁：← / → 鍵 或 空白鍵</span>
+        <button class="btn-nav" id="btnPrev" onclick="prevSlide()">◀ 上一頁</button>
+        <button class="btn-nav" id="btnNext" onclick="nextSlide()">下一頁 ▶</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 10;
+
+    const slides = document.querySelectorAll('.slide-body');
+    const progressBar = document.getElementById('progressBar');
+    const slideCounter = document.getElementById('slideCounter');
+    const sourceTag = document.getElementById('sourceTag');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+
+    function updateSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      // 更新幻燈片顯示狀態
+      slides.forEach(slide => {
+        const slideIndex = parseInt(slide.getAttribute('data-slide'));
+        if (slideIndex === currentSlide) {
+          slide.classList.add('active');
+          // 更新出處資訊
+          const src = slide.getAttribute('data-source');
+          sourceTag.textContent = src;
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      // 更新頁碼與進度條
+      slideCounter.textContent = `${String(currentSlide).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+      const progressPercent = (currentSlide / totalSlides) * 100;
+      progressBar.style.width = `${progressPercent}%`;
+
+      // 更新按鈕啟用狀態
+      btnPrev.disabled = (currentSlide === 1);
+      btnNext.disabled = (currentSlide === totalSlides);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        updateSlide(currentSlide - 1);
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        updateSlide(currentSlide + 1);
+      }
+    }
+
+    // 鍵盤切換控制
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key === 'l') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'Backspace' || e.key === 'PageUp' || e.key === 'h') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        updateSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        updateSlide(totalSlides);
+      }
+    });
+
+    // 初始化
+    updateSlide(1);
+  </script>
+</body>
+</html>
